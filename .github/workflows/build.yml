@@ -61,5 +61,5 @@ jobs:
             gh release create "$TAG" "$JAR" \
               --target "${{ github.sha }}" \
               --title "MiraAirdrops $TAG" \
-              --notes "Spawns supply chests from fixed Y=110 air blocks inside WarZone or saved WorldEdit X/Z footprints, lets them fall naturally under gravity, prevents duplicate drop columns, restores missing crates through the same Y=110 selector, and adds a GUI action to teleport to the nearest landed active crate. Built against MiraFactions 0.2.18 always-loaded SafeZone/WarZone chunks."
+              --notes "Fixes falling crate physics by spawning SAND at Y=110 and converting it into the marked loot CHEST only when the falling sand lands. This avoids relying on chest FallingBlock physics while preserving air-only spawn checks, WarZone/WorldEdit targeting, reconciliation, persistence, and nearest-crate teleport."
           fi
