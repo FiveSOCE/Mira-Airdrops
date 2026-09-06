@@ -1,0 +1,22 @@
+name: MiraAirdrops
+version: 0.1.0
+main: com.mira.airdrops.MiraAirdropsPlugin
+api-version: '1.21'
+authors: [FiveS]
+description: Randomized Warzone/WorldEdit supply-drop events for the Mira ecosystem.
+depend: [MiraCore]
+softdepend: [MiraFactions, WorldEdit]
+
+commands:
+  airdrop:
+    description: MiraAirdrops status and administration.
+    usage: /airdrop [gui|start|cancel|status]
+    aliases: [airdrops]
+
+permissions:
+  miraairdrops.admin:
+    description: Administer MiraAirdrops.
+    default: op
+  miraairdrops.status:
+    description: View current airdrop status.
+    default: true
