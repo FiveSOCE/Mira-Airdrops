@@ -4,16 +4,23 @@ First-party randomized supply-drop events for the Mira Minecraft ecosystem.
 
 ## Download
 
-**Current release: v0.1.2**
+**Current release: v0.1.3**
 
-- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.2/MiraAirdrops-0.1.2.jar
+- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.3/MiraAirdrops-0.1.3.jar
 - All releases: https://github.com/FiveSOCE/Mira-Airdrops/releases
 
-Verified v0.1.2 asset:
+Verified v0.1.3 asset:
 
-- Size: 38,814 bytes
-- SHA-256: `428a807674f1bc7738dce3ee039a5a066b316d1964ac20e7dccdbe2e92c52bfd`
-- Release target: `7efd9f261bdcf25dfa9f219560d3fd724d1c69bb`
+- Size: 43,456 bytes
+- SHA-256: `971955ce93628e4591418ea08c5be23d8e6ad36e922d86d248b7c9f03f0aca56`
+- Release target: `e18314bdf81cc5d594759d8e884f60f47bc6a661`
+
+## v0.1.3 hardening
+
+- MiraFactions and WorldEdit integrations are isolated behind conditionally loaded bridges, so either soft dependency can be absent without breaking the base plugin.
+- WarZone resolution now uses the Bukkit ServicesManager where MiraFactions actually registers its public API.
+- Active events reconcile missing falling entities and missing landed crates every configured interval, respawning the original reward payload instead of leaving unreachable remaining crates.
+- Releases are no longer published from ordinary main-branch pushes. Publication only occurs from an explicit `release/*` branch based on the final successful commit.
 
 ## Requirements
 
@@ -139,7 +146,7 @@ gradle clean test build
 Output:
 
 ```text
-build/libs/MiraAirdrops-0.1.2.jar
+build/libs/MiraAirdrops-0.1.3.jar
 ```
 
 GitHub Actions performs the Java setup, Gradle build/test, artifact upload and release publication.
