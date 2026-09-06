@@ -1,13 +1,16 @@
 package com.mira.airdrops;
 
 import com.mira.core.api.MiraCore;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
+import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
-public final class AirdropCommand implements CommandExecutor {
+import java.util.List;
+import java.util.Locale;
+
+public final class AirdropCommand implements CommandExecutor, TabCompleter {
+    private static final List<String> SUBCOMMANDS = List.of("gui", "start", "cancel", "status");
+
     private final MiraCore core;
     private final AirdropService service;
     private final AirdropGuiService gui;
@@ -23,7 +26,7 @@ public final class AirdropCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
-        String action = args.length == 0 ? "gui" : args[0].toLowerCase();
+        String action = args.length == 0 ? "gui" : args[0].toLowerCase(Locale.ROOT);
 
         if (action.equals("status")) {
             if (!sender.hasPermission("miraairdrops.status")) {
@@ -50,10 +53,22 @@ public final class AirdropCommand implements CommandExecutor {
                     gui.openMain(player);
                 }
             }
-            case "start" -> service.start(sender instanceof Player player ? player : null);
-            case "cancel" -> service.cancel(true);
+            case "start" -> service.start(sender);
+            case "cancel" -> service.cancel(sender, true);
             default -> core.messages().send(sender, "&7/airdrop <gui|start|cancel|status>");
         }
         return true;
+    }
+
+    @Override
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
+                                      @NotNull String alias, @NotNull String[] args) {
+        if (args.length != 1) return List.of();
+        String prefix = args[0].toLowerCase(Locale.ROOT);
+        return SUBCOMMANDS.stream()
+                .filter(sub -> (sub.equals("status") ? sender.hasPermission("miraairdrops.status")
+                        : sender.hasPermission("miraairdrops.admin")))
+                .filter(sub -> sub.startsWith(prefix))
+                .toList();
     }
 }
