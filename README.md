@@ -1,5 +1,7 @@
 # MiraAirdrops
 
+[**Download MiraAirdrops v0.1.0**](https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.0/MiraAirdrops-0.1.0.jar)
+
 First-party Paper 1.21.11 / Java 21 supply-drop events for the Mira ecosystem.
 
 ## Core behavior
