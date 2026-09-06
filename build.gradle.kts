@@ -4,7 +4,7 @@ import java.security.MessageDigest
 plugins { java }
 
 group = "com.mira"
-version = "0.1.4"
+version = "0.1.5"
 
 repositories {
     mavenCentral()
@@ -15,8 +15,8 @@ repositories {
 val miraCoreVersion = "0.4.1"
 val miraCoreSha256 = "4a20f538762bb550b4f8c359eb16945eee786ed0741ba60c0dbfc7e07e2249a9"
 val miraCoreJar = layout.projectDirectory.file("libs/MiraCore-$miraCoreVersion.jar").asFile
-val miraFactionsVersion = "0.2.17"
-val miraFactionsSha256 = "6af260d2f9edf384e1dd7d100b754c56310f17869af7736adc41f78d6d37cd6b"
+val miraFactionsVersion = "0.2.18"
+val miraFactionsSha256 = "4bbd2867a00aafffb4f0ded82aba07cac92d3f11a21cf8359289fc8cd2def751"
 val miraFactionsJar = layout.projectDirectory.file("libs/MiraFactions-$miraFactionsVersion.jar").asFile
 
 fun sha256(file: File): String {
