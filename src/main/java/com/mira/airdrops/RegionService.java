@@ -46,6 +46,7 @@ public final class RegionService {
             var session = WorldEdit.getInstance().getSessionManager().get(actor);
             var selectionWorld = session.getSelectionWorld();
             if (selectionWorld == null) return false;
+
             Region region = session.getSelection(selectionWorld);
             FileConfiguration cfg = plugin.getConfig();
             cfg.set("region.worldedit.world", selectionWorld.getName());
@@ -73,6 +74,7 @@ public final class RegionService {
             if (!plugin.getConfig().getBoolean("region.worldedit.configured", false)) return false;
             return Bukkit.getWorld(plugin.getConfig().getString("region.worldedit.world", "")) != null;
         }
+
         return Bukkit.getWorld(plugin.getConfig().getString("region.warzone-world", "world")) != null
                 && core.services().get(MiraFactionsApi.class).isPresent();
     }
@@ -85,6 +87,7 @@ public final class RegionService {
         FileConfiguration cfg = plugin.getConfig();
         World world = Bukkit.getWorld(cfg.getString("region.worldedit.world", ""));
         if (world == null) return null;
+
         int minX = Math.min(cfg.getInt("region.worldedit.min-x"), cfg.getInt("region.worldedit.max-x"));
         int maxX = Math.max(cfg.getInt("region.worldedit.min-x"), cfg.getInt("region.worldedit.max-x"));
         int minZ = Math.min(cfg.getInt("region.worldedit.min-z"), cfg.getInt("region.worldedit.max-z"));
@@ -97,6 +100,7 @@ public final class RegionService {
             int z = ThreadLocalRandom.current().nextInt(minZ, maxZ + 1);
             int y = world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 1;
             if (y < minY || y > maxY || y >= world.getMaxHeight()) continue;
+
             Location target = new Location(world, x, y, z);
             if (target.getBlock().getType().isAir()) return target;
         }
@@ -108,19 +112,48 @@ public final class RegionService {
         MiraFactionsApi factions = core.services().get(MiraFactionsApi.class).orElse(null);
         if (world == null || factions == null) return null;
 
-        WorldBorder border = world.getWorldBorder();
-        double half = border.getSize() / 2.0D - 16.0D;
-        double cx = border.getCenter().getX();
-        double cz = border.getCenter().getZ();
+        Location spawn = world.getSpawnLocation();
+        int searchRadius = Math.max(64, plugin.getConfig().getInt("region.warzone-search-radius", 1500));
+        int attempts = Math.max(250, plugin.getConfig().getInt("region.warzone-search-attempts", 2000));
 
-        for (int attempt = 0; attempt < 250; attempt++) {
-            int x = (int) Math.floor(ThreadLocalRandom.current().nextDouble(cx - half, cx + half));
-            int z = (int) Math.floor(ThreadLocalRandom.current().nextDouble(cz - half, cz + half));
+        WorldBorder border = world.getWorldBorder();
+        double borderHalf = Math.max(16.0D, border.getSize() / 2.0D - 16.0D);
+        double borderMinX = border.getCenter().getX() - borderHalf;
+        double borderMaxX = border.getCenter().getX() + borderHalf;
+        double borderMinZ = border.getCenter().getZ() - borderHalf;
+        double borderMaxZ = border.getCenter().getZ() + borderHalf;
+
+        double localMinX = Math.max(borderMinX, spawn.getX() - searchRadius);
+        double localMaxX = Math.min(borderMaxX, spawn.getX() + searchRadius);
+        double localMinZ = Math.max(borderMinZ, spawn.getZ() - searchRadius);
+        double localMaxZ = Math.min(borderMaxZ, spawn.getZ() + searchRadius);
+
+        Location local = sampleWarzone(world, factions, localMinX, localMaxX, localMinZ, localMaxZ, attempts);
+        if (local != null) return local;
+
+        // Fallback to the full border only when the configured local search did not find
+        // enough WarZone. The faction check happens before terrain lookup, so rejected
+        // coordinates do not unnecessarily load chunks.
+        return sampleWarzone(world, factions, borderMinX, borderMaxX, borderMinZ, borderMaxZ,
+                Math.max(250, attempts / 4));
+    }
+
+    private Location sampleWarzone(World world, MiraFactionsApi factions,
+                                   double minX, double maxX, double minZ, double maxZ, int attempts) {
+        if (maxX <= minX || maxZ <= minZ) return null;
+
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            int x = (int) Math.floor(ThreadLocalRandom.current().nextDouble(minX, maxX));
+            int z = (int) Math.floor(ThreadLocalRandom.current().nextDouble(minZ, maxZ));
+
+            Location claimProbe = new Location(world, x, world.getMinHeight(), z);
+            if (!factions.isWarZone(claimProbe)) continue;
+
             int y = world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 1;
             if (y >= world.getMaxHeight()) continue;
+
             Location target = new Location(world, x, y, z);
-            if (!target.getBlock().getType().isAir()) continue;
-            if (factions.isWarZone(target)) return target;
+            if (target.getBlock().getType().isAir()) return target;
         }
         return null;
     }
