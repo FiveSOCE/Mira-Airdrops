@@ -9,6 +9,7 @@ event:
   min-loot-items: 1
   max-loot-items: 5
   max-placement-attempts-per-crate: 250
+  reconcile-seconds: 5
 
 region:
   mode: WARZONE
