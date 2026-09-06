@@ -64,6 +64,7 @@ public final class AirdropService {
     public boolean active() { return active; }
     public int total() { return total; }
     public int remaining() { return falling.size() + landed.size(); }
+    public int landedCount() { return landed.size(); }
     public List<ItemStack> lootPool() { return lootPool.stream().map(ItemStack::clone).toList(); }
 
     public void setLootPool(Collection<ItemStack> items) {
@@ -625,11 +626,8 @@ public final class AirdropService {
                 continue;
             }
 
-            if (block.getType().isAir() && spawnFalling(drop, false)) {
-                restored++;
-                continue;
-            }
-
+            // Restored/missing crates always re-enter through the configured Y=110 spawn selector.
+            // A persisted landed location must never become a new low-altitude falling spawn.
             if (respawn(drop.payload(), false)) restored++;
         }
 
