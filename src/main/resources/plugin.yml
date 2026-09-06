@@ -1,5 +1,5 @@
 name: MiraAirdrops
-version: 0.1.0
+version: ${version}
 main: com.mira.airdrops.MiraAirdropsPlugin
 api-version: '1.21'
 authors: [FiveS]
