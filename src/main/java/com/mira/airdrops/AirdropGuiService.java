@@ -69,6 +69,10 @@ public final class AirdropGuiService {
         inv.setItem(32, item(Material.CHEST_MINECART, "&dEdit Loot Pool", List.of(
                 "&7Current entries: &f" + service.lootPool().size(),
                 "&eClick to edit real ItemStacks.")));
+        inv.setItem(34, item(Material.ENDER_PEARL, "&dTeleport to nearest Crate", List.of(
+                "&7Landed crates: &f" + service.landedCount(),
+                "&7Each click resolves the nearest crate still active.",
+                "&7Claimed/removed crates are skipped automatically.")));
         inv.setItem(49, item(Material.BARRIER, "&cClose", List.of()));
         player.openInventory(inv);
     }
@@ -119,6 +123,11 @@ public final class AirdropGuiService {
                 service.rescheduleAuto();
             }
             case 32 -> { openLoot(player); return; }
+            case 34 -> {
+                player.closeInventory();
+                service.teleportToNearestCrate(player);
+                return;
+            }
             case 49 -> { player.closeInventory(); return; }
             default -> { return; }
         }
