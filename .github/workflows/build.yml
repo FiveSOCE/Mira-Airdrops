@@ -61,5 +61,5 @@ jobs:
             gh release create "$TAG" "$JAR" \
               --target "${{ github.sha }}" \
               --title "MiraAirdrops $TAG" \
-              --notes "Fixes the WarZone watchdog stall by pairing MiraFactions 0.2.17 coordinate-only claim lookups with loaded-chunk-only Airdrops terrain sampling. WarZone probing no longer synchronously loads or generates chunks."
+              --notes "Spawns supply chests from fixed Y=110 air blocks inside WarZone or saved WorldEdit X/Z footprints, lets them fall naturally under gravity, prevents duplicate drop columns, restores missing crates through the same Y=110 selector, and adds a GUI action to teleport to the nearest landed active crate. Built against MiraFactions 0.2.18 always-loaded SafeZone/WarZone chunks."
           fi
