@@ -4,18 +4,18 @@ First-party randomized supply-drop events for the Mira Minecraft ecosystem.
 
 ## Download
 
-**Current release: v0.1.4**
+**Current release: v0.1.5**
 
-- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.4/MiraAirdrops-0.1.4.jar
+- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.5/MiraAirdrops-0.1.5.jar
 - All releases: https://github.com/FiveSOCE/Mira-Airdrops/releases
 
-Verified v0.1.4 asset:
+Verified v0.1.5 asset:
 
-- Size: 43,131 bytes
-- SHA-256: `150fd1e45122bdf0e1bfdbafb3ded07ab46f93a9a6907f7934e59a751d8396c8`
-- Release target: `cfd836810bac0cecda26e86c078da65470aaa647`
+- Size: 44,937 bytes
+- SHA-256: `6b427b192ec7f5c981b1b1097c5e85c74bd97bb3962e442917465604bba69283`
+- Release target: `7f24e6ed5d7b329e80e36147990c481173ae4ff1`
 
-## v0.1.4 hardening
+## v0.1.5 hardening
 
 - MiraFactions and WorldEdit integrations are isolated behind conditionally loaded bridges, so either soft dependency can be absent without breaking the base plugin.
 - WarZone resolution now uses the Bukkit ServicesManager where MiraFactions actually registers its public API.
@@ -27,7 +27,7 @@ Verified v0.1.4 asset:
 - Paper 1.21.11
 - Java 21
 - MiraCore 0.4.1+
-- MiraFactions 0.2.17+ when using WARZONE region mode
+- MiraFactions 0.2.18+ when using WARZONE region mode
 - WorldEdit 7.3.19+ when capturing a WorldEdit region
 
 MiraFactions and WorldEdit are optional integrations. The selected region mode must have its dependency/configuration available before an event can start.
@@ -146,16 +146,29 @@ gradle clean test build
 Output:
 
 ```text
-build/libs/MiraAirdrops-0.1.4.jar
+build/libs/MiraAirdrops-0.1.5.jar
 ```
 
 GitHub Actions performs the Java setup, Gradle build/test, artifact upload and release publication.
 
 
-## v0.1.4 watchdog fix
+## v0.1.5 watchdog fix
 
 - MiraFactions 0.2.17 claim/territory lookups no longer call `Location#getChunk()`; claim keys are derived directly from block coordinates.
 - WarZone sampling in MiraAirdrops only considers chunks that are already loaded.
 - Terrain height checks therefore cannot trigger synchronous chunk generation during airdrop spawning or reconciliation.
 - This directly addresses the Paper watchdog stalls caused by WarZone probes waiting for chunk generation on the server thread.
+
+
+
+## v0.1.5 fixed-altitude falling crates
+
+- Supply crates now spawn at `event.spawn-y`, default **Y=110**.
+- The exact spawn block must be air. Occupied Y=110 positions are skipped and another X/Z column is selected.
+- WarZone mode samples loaded MiraFactions WarZone chunks.
+- WorldEdit mode uses the saved selection as the X/Z footprint.
+- Falling crates use normal gravity and settle as chests on the first valid solid surface below.
+- Duplicate active drop columns are rejected.
+- Persisted or externally removed crates respawn through the same Y=110 selector.
+- The admin GUI now includes **Teleport to nearest Crate**. Each click resolves the nearest currently landed active crate, so claimed/removed crates are skipped automatically.
 
