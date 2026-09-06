@@ -110,40 +110,20 @@ public final class RegionService {
         World world = Bukkit.getWorld(plugin.getConfig().getString("region.warzone-world", "world"));
         if (world == null || warzoneResolver == null || !warzoneResolver.available()) return null;
 
-        Location spawn = world.getSpawnLocation();
-        int searchRadius = Math.max(64, plugin.getConfig().getInt("region.warzone-search-radius", 1500));
-        int attempts = Math.max(250, plugin.getConfig().getInt("region.warzone-search-attempts", 2000));
+        var loaded = new java.util.ArrayList<org.bukkit.Chunk>();
+        for (org.bukkit.Chunk chunk : world.getLoadedChunks()) {
+            Location claimProbe = new Location(world, (chunk.getX() << 4) + 8, world.getMinHeight(), (chunk.getZ() << 4) + 8);
+            if (warzoneResolver.isWarZone(claimProbe)) loaded.add(chunk);
+        }
+        if (loaded.isEmpty()) return null;
 
-        WorldBorder border = world.getWorldBorder();
-        double borderHalf = Math.max(16.0D, border.getSize() / 2.0D - 16.0D);
-        double borderMinX = border.getCenter().getX() - borderHalf;
-        double borderMaxX = border.getCenter().getX() + borderHalf;
-        double borderMinZ = border.getCenter().getZ() - borderHalf;
-        double borderMaxZ = border.getCenter().getZ() + borderHalf;
-
-        double localMinX = Math.max(borderMinX, spawn.getX() - searchRadius);
-        double localMaxX = Math.min(borderMaxX, spawn.getX() + searchRadius);
-        double localMinZ = Math.max(borderMinZ, spawn.getZ() - searchRadius);
-        double localMaxZ = Math.min(borderMaxZ, spawn.getZ() + searchRadius);
-
-        Location local = sampleWarzone(world, localMinX, localMaxX, localMinZ, localMaxZ, attempts);
-        if (local != null) return local;
-
-        return sampleWarzone(world, borderMinX, borderMaxX, borderMinZ, borderMaxZ,
-                Math.max(250, attempts / 4));
-    }
-
-    private Location sampleWarzone(World world,
-                                   double minX, double maxX, double minZ, double maxZ, int attempts) {
-        if (maxX <= minX || maxZ <= minZ) return null;
-
+        int attempts = Math.max(50, plugin.getConfig().getInt("region.warzone-search-attempts", 2000));
         for (int attempt = 0; attempt < attempts; attempt++) {
-            int x = (int) Math.floor(ThreadLocalRandom.current().nextDouble(minX, maxX));
-            int z = (int) Math.floor(ThreadLocalRandom.current().nextDouble(minZ, maxZ));
+            org.bukkit.Chunk chunk = loaded.get(ThreadLocalRandom.current().nextInt(loaded.size()));
+            int x = (chunk.getX() << 4) + ThreadLocalRandom.current().nextInt(16);
+            int z = (chunk.getZ() << 4) + ThreadLocalRandom.current().nextInt(16);
 
-            Location claimProbe = new Location(world, x, world.getMinHeight(), z);
-            if (!warzoneResolver.isWarZone(claimProbe)) continue;
-
+            // This chunk is already loaded, so terrain lookup cannot synchronously generate a new chunk.
             int y = world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 1;
             if (y >= world.getMaxHeight()) continue;
 
