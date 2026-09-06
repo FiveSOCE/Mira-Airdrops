@@ -1,12 +1,15 @@
 package com.mira.airdrops;
 
 import org.bukkit.Material;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.Action;
+import org.bukkit.event.block.*;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -32,9 +35,53 @@ public final class AirdropListener implements Listener {
     public void onClaim(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) return;
         if (event.getClickedBlock().getType() != Material.CHEST) return;
-        if (service.claim(event.getPlayer(), event.getClickedBlock())) {
-            event.setCancelled(true);
-        }
+        if (service.claim(event.getPlayer(), event.getClickedBlock())) event.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onBreak(BlockBreakEvent event) {
+        if (service.isAirdropChest(event.getBlock())) event.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onBurn(BlockBurnEvent event) {
+        if (service.isAirdropChest(event.getBlock())) event.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPistonExtend(BlockPistonExtendEvent event) {
+        if (event.getBlocks().stream().anyMatch(service::isAirdropChest)) event.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPistonRetract(BlockPistonRetractEvent event) {
+        if (event.getBlocks().stream().anyMatch(service::isAirdropChest)) event.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onBlockExplode(BlockExplodeEvent event) {
+        event.blockList().removeIf(service::isAirdropChest);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onEntityExplode(EntityExplodeEvent event) {
+        event.blockList().removeIf(service::isAirdropChest);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onFluid(BlockFromToEvent event) {
+        if (service.isAirdropChest(event.getToBlock())) event.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onFade(BlockFadeEvent event) {
+        if (service.isAirdropChest(event.getBlock())) event.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPhysics(BlockPhysicsEvent event) {
+        Block block = event.getBlock();
+        if (service.isAirdropChest(block)) event.setCancelled(true);
     }
 
     @EventHandler
