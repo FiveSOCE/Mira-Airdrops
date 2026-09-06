@@ -191,7 +191,7 @@ public final class AirdropService {
     private boolean respawn(DropPayload payload, boolean persist) {
         int attempts = Math.max(25, plugin.getConfig().getInt("event.max-placement-attempts-per-crate", 250));
         for (int i = 0; i < attempts; i++) {
-            Location target = regions.randomLanding();
+            Location target = regions.randomSpawn();
             if (target == null || !target.getBlock().getType().isAir()) continue;
             ActiveDrop drop = new ActiveDrop(payload, BlockKey.of(target));
             if (spawnFalling(drop, persist)) return true;
@@ -200,24 +200,35 @@ public final class AirdropService {
     }
 
     private boolean spawnFalling(ActiveDrop drop, boolean persist) {
-        Location target = drop.target().location();
-        if (!target.getBlock().getType().isAir()) return false;
-
-        World world = target.getWorld();
+        Location spawn = drop.target().location();
+        World world = spawn.getWorld();
         if (world == null) return false;
-
-        double spawnY = Math.min(world.getMaxHeight() - 2.0D, target.getY() + 25.0D);
-        if (spawnY <= target.getY()) spawnY = target.getY() + 1.0D;
+        if (!world.isChunkLoaded(spawn.getBlockX() >> 4, spawn.getBlockZ() >> 4)) return false;
+        if (!spawn.getBlock().getType().isAir()) return false;
+        if (columnAlreadyTracked(drop.target(), drop.payload().id())) return false;
 
         FallingBlock entity = world.spawnFallingBlock(
-                new Location(world, target.getBlockX() + 0.5D, spawnY, target.getBlockZ() + 0.5D),
+                new Location(world, spawn.getBlockX() + 0.5D, spawn.getBlockY(), spawn.getBlockZ() + 0.5D),
                 Material.CHEST.createBlockData());
+        entity.setGravity(true);
         entity.setDropItem(false);
         entity.setHurtEntities(false);
         entity.getPersistentDataContainer().set(dropKey, PersistentDataType.STRING, drop.payload().id().toString());
         falling.put(entity.getUniqueId(), drop);
         if (persist) saveState();
         return true;
+    }
+
+    private boolean columnAlreadyTracked(BlockKey candidate, UUID payloadId) {
+        for (ActiveDrop existing : falling.values()) {
+            if (existing.payload().id().equals(payloadId)) continue;
+            if (existing.target().sameColumn(candidate)) return true;
+        }
+        for (ActiveDrop existing : landed.values()) {
+            if (existing.payload().id().equals(payloadId)) continue;
+            if (existing.target().sameColumn(candidate)) return true;
+        }
+        return false;
     }
 
     public void handleLanding(FallingBlock entity, EntityChangeBlockEvent event) {
@@ -321,6 +332,54 @@ public final class AirdropService {
         String id = block.getPersistentDataContainer().get(dropKey, PersistentDataType.STRING);
         return id != null;
     }
+
+    public boolean teleportToNearestCrate(Player player) {
+        if (player == null) return false;
+        if (!active || landed.isEmpty()) {
+            core.messages().send(player, falling.isEmpty()
+                    ? "&cThere are no active airdrop crates to teleport to."
+                    : "&eThe airdrop crates are still falling. Try again once one has landed.");
+            return false;
+        }
+
+        ActiveDrop nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
+
+        for (ActiveDrop drop : landed.values()) {
+            Location crate = drop.target().location();
+            if (crate.getWorld() == null) continue;
+
+            double distance;
+            if (crate.getWorld().equals(player.getWorld())) {
+                distance = crate.distanceSquared(player.getLocation());
+            } else {
+                // Prefer same-world crates, but still allow recovery when the admin is elsewhere.
+                distance = Double.MAX_VALUE / 2.0D;
+            }
+
+            if (nearest == null || distance < nearestDistance) {
+                nearest = drop;
+                nearestDistance = distance;
+            }
+        }
+
+        if (nearest == null) {
+            core.messages().send(player, "&cNo landed airdrop crate could be located.");
+            return false;
+        }
+
+        Location crate = nearest.target().location();
+        Location destination = crate.clone().add(0.5D, 1.0D, 0.5D);
+        player.teleportAsync(destination).thenAccept(success -> {
+            if (success) {
+                core.messages().send(player, "&aTeleported to the nearest active airdrop crate.");
+            } else {
+                core.messages().send(player, "&cCould not teleport to that airdrop crate.");
+            }
+        });
+        return true;
+    }
+
 
     private void reconcileActiveDrops() {
         if (!active) return;
@@ -610,6 +669,10 @@ public final class AirdropService {
             World world = Bukkit.getWorld(worldId);
             if (world == null) throw new IllegalStateException("Airdrop world is unavailable");
             return new Location(world, x, y, z);
+        }
+
+        boolean sameColumn(BlockKey other) {
+            return other != null && worldId.equals(other.worldId) && x == other.x && z == other.z;
         }
     }
 }
