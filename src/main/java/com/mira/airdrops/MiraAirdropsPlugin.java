@@ -30,7 +30,10 @@ public final class MiraAirdropsPlugin extends JavaPlugin {
             core.modules().setHealth(this, ModuleHealth.UNHEALTHY, "airdrop command missing from plugin.yml");
             throw new IllegalStateException("airdrop command missing from plugin.yml");
         }
-        command.setExecutor(new AirdropCommand(core, service, gui, regions));
+
+        AirdropCommand executor = new AirdropCommand(core, service, gui, regions);
+        command.setExecutor(executor);
+        command.setTabCompleter(executor);
 
         core.modules().setHealth(this, ModuleHealth.HEALTHY,
                 "Randomized Warzone/WorldEdit airdrop events ready");
