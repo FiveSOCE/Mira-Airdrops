@@ -4,14 +4,22 @@ import com.mira.core.api.MiraCore;
 import com.mira.core.api.RewardService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
-import org.bukkit.*;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.TileState;
+import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
@@ -24,13 +32,16 @@ public final class AirdropService {
     private final MiraCore core;
     private final RegionService regions;
     private final File lootFile;
+    private final File stateFile;
+    private final NamespacedKey dropKey;
     private final List<ItemStack> lootPool = new ArrayList<>();
-    private final Map<UUID, DropPayload> falling = new HashMap<>();
-    private final Map<BlockKey, DropPayload> landed = new HashMap<>();
+    private final Map<UUID, ActiveDrop> falling = new HashMap<>();
+    private final Map<BlockKey, ActiveDrop> landed = new HashMap<>();
 
     private boolean inbound;
     private boolean active;
     private int total;
+    private long inboundBeginsAt;
     private BukkitTask inboundTask;
     private BukkitTask autoTask;
 
@@ -39,7 +50,10 @@ public final class AirdropService {
         this.core = core;
         this.regions = regions;
         this.lootFile = new File(plugin.getDataFolder(), "loot.yml");
+        this.stateFile = new File(plugin.getDataFolder(), "event-state.yml");
+        this.dropKey = new NamespacedKey(plugin, "airdrop_id");
         loadLoot();
+        loadState();
         scheduleAuto();
     }
 
@@ -58,7 +72,7 @@ public final class AirdropService {
         saveLoot();
     }
 
-    public boolean start(Player actor) {
+    public boolean start(CommandSender actor) {
         if (inbound || active) {
             if (actor != null) core.messages().send(actor, "&cAn airdrop is already inbound or active.");
             return false;
@@ -74,13 +88,24 @@ public final class AirdropService {
 
         int seconds = Math.max(1, plugin.getConfig().getInt("event.inbound-seconds", 30));
         inbound = true;
+        inboundBeginsAt = System.currentTimeMillis() + seconds * 1000L;
         broadcast("messages.inbound", Map.of("%seconds%", Integer.toString(seconds)));
-        inboundTask = Bukkit.getScheduler().runTaskLater(plugin, this::beginNow, seconds * 20L);
+        audit("INBOUND", actor, "Airdrop inbound countdown started.", Map.of(
+                "seconds", Integer.toString(seconds),
+                "region", regions.summary()));
+        saveState();
+        scheduleInbound(seconds * 20L);
         return true;
+    }
+
+    private void scheduleInbound(long ticks) {
+        if (inboundTask != null) inboundTask.cancel();
+        inboundTask = Bukkit.getScheduler().runTaskLater(plugin, this::beginNow, Math.max(1L, ticks));
     }
 
     private void beginNow() {
         inbound = false;
+        inboundBeginsAt = 0L;
         inboundTask = null;
         if (active) return;
 
@@ -92,45 +117,58 @@ public final class AirdropService {
         active = true;
         for (int i = 0; i < requested; i++) {
             DropPayload payload = new DropPayload(UUID.randomUUID(), rollLoot());
-            if (spawnFalling(payload)) total++;
+            if (respawn(payload, false)) total++;
         }
 
         if (total == 0) {
             active = false;
-            Bukkit.broadcast(core.messages().prefix().append(core.messages().parse(
-                    "&cAirdrop aborted because no valid drop locations could be found.")));
+            saveState();
+            broadcastRaw("&cAirdrop aborted because no valid drop locations could be found.");
+            audit("ABORTED", null, "Airdrop aborted because no valid drop locations were found.", Map.of());
             return;
         }
 
+        saveState();
         broadcast("messages.started", Map.of("%total%", Integer.toString(total)));
         broadcastRemaining();
+        audit("STARTED", null, "Airdrop event started.", Map.of(
+                "total", Integer.toString(total),
+                "region", regions.summary()));
     }
 
     public void cancel(boolean announce) {
+        cancel(null, announce);
+    }
+
+    public void cancel(CommandSender actor, boolean announce) {
+        boolean hadEvent = inbound || active;
+
         if (inboundTask != null) inboundTask.cancel();
         inboundTask = null;
         inbound = false;
+        inboundBeginsAt = 0L;
 
-        for (UUID entityId : new ArrayList<>(falling.keySet())) {
-            var entity = Bukkit.getEntity(entityId);
-            if (entity != null) entity.remove();
-        }
+        removeTransientWorldObjects();
         falling.clear();
-
-        for (BlockKey key : new ArrayList<>(landed.keySet())) {
-            Block block = key.location().getBlock();
-            if (block.getType() == Material.CHEST) block.setType(Material.AIR, false);
-        }
         landed.clear();
-        boolean wasActive = active;
+
         active = false;
         total = 0;
-        if (announce && wasActive) broadcast("messages.cancelled", Map.of());
+        saveState();
+
+        if (announce && hadEvent) broadcast("messages.cancelled", Map.of());
+        if (hadEvent) audit("CANCELLED", actor, "Airdrop event cancelled.", Map.of());
     }
 
     public void shutdown() {
-        cancel(false);
+        if (inboundTask != null) inboundTask.cancel();
         if (autoTask != null) autoTask.cancel();
+
+        // Preserve the logical event before removing transient world objects. This prevents
+        // duplicate vanilla falling blocks/chests after a clean restart while allowing the
+        // exact remaining rewards to be restored from event-state.yml.
+        saveState();
+        removeTransientWorldObjects();
     }
 
     public void rescheduleAuto() {
@@ -146,37 +184,49 @@ public final class AirdropService {
         }, minutes * 60L * 20L, minutes * 60L * 20L);
     }
 
-    private boolean spawnFalling(DropPayload payload) {
+    private boolean respawn(DropPayload payload, boolean persist) {
         int attempts = Math.max(25, plugin.getConfig().getInt("event.max-placement-attempts-per-crate", 250));
         for (int i = 0; i < attempts; i++) {
             Location target = regions.randomLanding();
             if (target == null || !target.getBlock().getType().isAir()) continue;
-            World world = target.getWorld();
-            if (world == null) continue;
-            double spawnY = Math.min(world.getMaxHeight() - 2.0D, target.getY() + 25.0D);
-            if (spawnY <= target.getY()) spawnY = target.getY() + 1.0D;
-
-            FallingBlock entity = world.spawnFallingBlock(
-                    new Location(world, target.getBlockX() + 0.5D, spawnY, target.getBlockZ() + 0.5D),
-                    Material.CHEST.createBlockData());
-            entity.setDropItem(false);
-            entity.setHurtEntities(false);
-            falling.put(entity.getUniqueId(), payload);
-            return true;
+            ActiveDrop drop = new ActiveDrop(payload, BlockKey.of(target));
+            if (spawnFalling(drop, persist)) return true;
         }
         return false;
     }
 
+    private boolean spawnFalling(ActiveDrop drop, boolean persist) {
+        Location target = drop.target().location();
+        if (!target.getBlock().getType().isAir()) return false;
+
+        World world = target.getWorld();
+        if (world == null) return false;
+
+        double spawnY = Math.min(world.getMaxHeight() - 2.0D, target.getY() + 25.0D);
+        if (spawnY <= target.getY()) spawnY = target.getY() + 1.0D;
+
+        FallingBlock entity = world.spawnFallingBlock(
+                new Location(world, target.getBlockX() + 0.5D, spawnY, target.getBlockZ() + 0.5D),
+                Material.CHEST.createBlockData());
+        entity.setDropItem(false);
+        entity.setHurtEntities(false);
+        entity.getPersistentDataContainer().set(dropKey, PersistentDataType.STRING, drop.payload().id().toString());
+        falling.put(entity.getUniqueId(), drop);
+        if (persist) saveState();
+        return true;
+    }
+
     public void handleLanding(FallingBlock entity, EntityChangeBlockEvent event) {
-        DropPayload payload = falling.remove(entity.getUniqueId());
-        if (payload == null) return;
+        ActiveDrop drop = falling.remove(entity.getUniqueId());
+        if (drop == null) return;
 
         if (!event.getBlock().getType().isAir()) {
             event.setCancelled(true);
             entity.remove();
             Bukkit.getScheduler().runTask(plugin, () -> {
-                if (active && !spawnFalling(payload)) {
+                if (active && !respawn(drop.payload(), true)) {
                     total = Math.max(0, total - 1);
+                    saveState();
                     checkComplete();
                 }
             });
@@ -186,37 +236,55 @@ public final class AirdropService {
         Location landing = event.getBlock().getLocation();
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (!active) {
-                if (landing.getBlock().getType() == Material.CHEST) landing.getBlock().setType(Material.AIR, false);
+                clearMarkedChest(landing.getBlock(), drop.payload().id());
                 return;
             }
-            if (landing.getBlock().getType() != Material.CHEST) {
-                if (!spawnFalling(payload)) {
+
+            Block block = landing.getBlock();
+            if (block.getType() != Material.CHEST) {
+                if (!respawn(drop.payload(), true)) {
                     total = Math.max(0, total - 1);
+                    saveState();
                     checkComplete();
                 }
                 return;
             }
-            landed.put(BlockKey.of(landing), payload);
+
+            ActiveDrop landedDrop = new ActiveDrop(drop.payload(), BlockKey.of(landing));
+            markChest(block, drop.payload().id());
+            landed.put(landedDrop.target(), landedDrop);
+            saveState();
         });
     }
 
     public boolean claim(Player player, Block block) {
         if (!active || block == null) return false;
-        BlockKey key = BlockKey.of(block.getLocation());
-        DropPayload payload = landed.remove(key);
-        if (payload == null) return false;
 
-        block.setType(Material.AIR, false);
+        BlockKey key = BlockKey.of(block.getLocation());
+        ActiveDrop drop = landed.get(key);
+        if (drop == null || !isMarkedChest(block, drop.payload().id())) return false;
 
         RewardService rewardService = core.rewards();
-        UUID rewardId = rewardService.queue(player.getUniqueId(), "MiraAirdrops", "Airdrop Cache",
-                payload.items(), List.of());
+        UUID rewardId;
+        try {
+            rewardId = rewardService.queue(player.getUniqueId(), "MiraAirdrops", "Airdrop Cache",
+                    drop.payload().items(), List.of());
+        } catch (RuntimeException ex) {
+            plugin.getLogger().severe("Could not queue airdrop reward for " + player.getName() + ": " + ex.getMessage());
+            core.messages().send(player, "&cThat airdrop could not be claimed safely. Please try again.");
+            return true;
+        }
+
+        landed.remove(key);
+        clearMarkedChest(block, drop.payload().id());
+        saveState();
+
         RewardService.ClaimResult result = rewardService.claim(player, rewardId);
 
         player.sendMessage(core.messages().prefix()
                 .append(core.messages().parse(plugin.getConfig().getString("messages.claim-prefix",
-                        "&6&lAirdrop &8>> &aYou found: "))));
-        for (ItemStack item : payload.items()) {
+                        "&aYou found: "))));
+        for (ItemStack item : drop.payload().items()) {
             player.sendMessage(Component.text(" • ")
                     .append(itemName(item))
                     .append(Component.text(" x" + item.getAmount())));
@@ -227,16 +295,37 @@ public final class AirdropService {
                             "&eSome rewards did not fit and were moved to &f/rewards&e."))));
         }
 
+        audit("CLAIMED", player, "Airdrop crate claimed.", Map.of(
+                "dropId", drop.payload().id().toString(),
+                "rewardId", rewardId.toString(),
+                "items", Integer.toString(drop.payload().items().size()),
+                "remaining", Integer.toString(remaining())));
+
         broadcastRemaining();
         checkComplete();
         return true;
+    }
+
+    public boolean isAirdropChest(Block block) {
+        if (block == null || block.getType() != Material.CHEST) return false;
+        ActiveDrop drop = landed.get(BlockKey.of(block.getLocation()));
+        return drop != null && isMarkedChest(block, drop.payload().id());
+    }
+
+    public boolean isAirdropFallingBlock(FallingBlock block) {
+        if (block == null) return false;
+        String id = block.getPersistentDataContainer().get(dropKey, PersistentDataType.STRING);
+        return id != null;
     }
 
     private void checkComplete() {
         if (!active || remaining() > 0) return;
         active = false;
         broadcast("messages.complete", Map.of());
+        audit("COMPLETED", null, "All airdrop crates were claimed.", Map.of(
+                "total", Integer.toString(total)));
         total = 0;
+        saveState();
     }
 
     private void broadcastRemaining() {
@@ -271,15 +360,58 @@ public final class AirdropService {
 
     private void broadcast(String path, Map<String, String> placeholders) {
         String raw = plugin.getConfig().getString(path, "");
-        for (Map.Entry<String, String> entry : placeholders.entrySet()) raw = raw.replace(entry.getKey(), entry.getValue());
-        Bukkit.broadcast(core.messages().parse(raw));
+        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+            raw = raw.replace(entry.getKey(), entry.getValue());
+        }
+        broadcastRaw(raw);
+    }
+
+    private void broadcastRaw(String raw) {
+        if (raw == null || raw.isBlank()) return;
+        Bukkit.broadcast(core.messages().prefix().append(core.messages().parse(raw)));
+    }
+
+    private void audit(String action, CommandSender actor, String message, Map<String, String> metadata) {
+        UUID actorId = actor instanceof Player player ? player.getUniqueId() : null;
+        String actorName = actor == null ? "SYSTEM" : actor.getName();
+        core.audit().record("MiraAirdrops", action, actorId, actorName, "airdrop", message, metadata);
+    }
+
+    private void markChest(Block block, UUID id) {
+        if (!(block.getState() instanceof TileState state)) return;
+        state.getPersistentDataContainer().set(dropKey, PersistentDataType.STRING, id.toString());
+        state.update(true, false);
+    }
+
+    private boolean isMarkedChest(Block block, UUID expected) {
+        if (!(block.getState() instanceof TileState state)) return false;
+        String id = state.getPersistentDataContainer().get(dropKey, PersistentDataType.STRING);
+        return expected.toString().equals(id);
+    }
+
+    private void clearMarkedChest(Block block, UUID expected) {
+        if (block == null || block.getType() != Material.CHEST) return;
+        if (isMarkedChest(block, expected)) block.setType(Material.AIR, false);
+    }
+
+    private void removeTransientWorldObjects() {
+        for (UUID entityId : new ArrayList<>(falling.keySet())) {
+            var entity = Bukkit.getEntity(entityId);
+            if (entity != null) entity.remove();
+        }
+        for (ActiveDrop drop : new ArrayList<>(landed.values())) {
+            Block block = drop.target().location().getBlock();
+            clearMarkedChest(block, drop.payload().id());
+        }
     }
 
     private void loadLoot() {
         lootPool.clear();
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(lootFile);
         List<?> raw = yaml.getList("loot", List.of());
-        for (Object object : raw) if (object instanceof ItemStack item && !item.getType().isAir()) lootPool.add(item.clone());
+        for (Object object : raw) {
+            if (object instanceof ItemStack item && !item.getType().isAir()) lootPool.add(item.clone());
+        }
     }
 
     private void saveLoot() {
@@ -292,21 +424,131 @@ public final class AirdropService {
         }
     }
 
+    private void saveState() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("state.inbound", inbound);
+        yaml.set("state.inbound-begins-at", inboundBeginsAt);
+        yaml.set("state.active", active);
+        yaml.set("state.total", total);
+
+        Map<UUID, ActiveDrop> drops = new LinkedHashMap<>();
+        for (ActiveDrop drop : falling.values()) drops.put(drop.payload().id(), drop);
+        for (ActiveDrop drop : landed.values()) drops.put(drop.payload().id(), drop);
+
+        for (ActiveDrop drop : drops.values()) {
+            String base = "drops." + drop.payload().id();
+            yaml.set(base + ".location", drop.target().location());
+            yaml.set(base + ".items", drop.payload().items());
+        }
+
+        try {
+            stateFile.getParentFile().mkdirs();
+            yaml.save(stateFile);
+        } catch (IOException ex) {
+            plugin.getLogger().severe("Could not save event-state.yml: " + ex.getMessage());
+        }
+    }
+
+    private void loadState() {
+        if (!stateFile.exists()) return;
+        YamlConfiguration yaml = YamlConfiguration.loadConfiguration(stateFile);
+
+        boolean savedInbound = yaml.getBoolean("state.inbound", false);
+        boolean savedActive = yaml.getBoolean("state.active", false);
+        long savedBeginsAt = yaml.getLong("state.inbound-begins-at", 0L);
+        int savedTotal = Math.max(0, yaml.getInt("state.total", 0));
+
+        List<ActiveDrop> savedDrops = new ArrayList<>();
+        ConfigurationSection section = yaml.getConfigurationSection("drops");
+        if (section != null) {
+            for (String idText : section.getKeys(false)) {
+                try {
+                    UUID id = UUID.fromString(idText);
+                    Location location = yaml.getLocation("drops." + idText + ".location");
+                    if (location == null || location.getWorld() == null) continue;
+
+                    List<ItemStack> items = new ArrayList<>();
+                    for (Object object : yaml.getList("drops." + idText + ".items", List.of())) {
+                        if (object instanceof ItemStack item && !item.getType().isAir()) items.add(item.clone());
+                    }
+                    if (items.isEmpty()) continue;
+
+                    savedDrops.add(new ActiveDrop(new DropPayload(id, items), BlockKey.of(location)));
+                } catch (IllegalArgumentException ignored) {
+                    plugin.getLogger().warning("Skipped invalid persisted airdrop id " + idText);
+                }
+            }
+        }
+
+        if (savedActive && !savedDrops.isEmpty()) {
+            active = true;
+            total = Math.max(savedTotal, savedDrops.size());
+            Bukkit.getScheduler().runTask(plugin, () -> restoreDrops(savedDrops));
+            return;
+        }
+
+        if (savedInbound) {
+            inbound = true;
+            inboundBeginsAt = savedBeginsAt;
+            long remainingMillis = Math.max(0L, savedBeginsAt - System.currentTimeMillis());
+            long ticks = Math.max(1L, (remainingMillis + 49L) / 50L);
+            scheduleInbound(ticks);
+        }
+    }
+
+    private void restoreDrops(List<ActiveDrop> savedDrops) {
+        if (!active) return;
+
+        int restored = 0;
+        for (ActiveDrop drop : savedDrops) {
+            Block block = drop.target().location().getBlock();
+
+            if (block.getType() == Material.CHEST && isMarkedChest(block, drop.payload().id())) {
+                landed.put(drop.target(), drop);
+                restored++;
+                continue;
+            }
+
+            if (block.getType().isAir() && spawnFalling(drop, false)) {
+                restored++;
+                continue;
+            }
+
+            if (respawn(drop.payload(), false)) restored++;
+        }
+
+        if (restored == 0) {
+            active = false;
+            total = 0;
+            broadcastRaw("&cThe persisted airdrop could not be restored safely and was cancelled.");
+            audit("RESTORE_FAILED", null, "Persisted airdrop could not be restored.", Map.of());
+        } else {
+            total = Math.max(restored, total - (savedDrops.size() - restored));
+            plugin.getLogger().info("Restored " + restored + " persisted airdrop crate(s).");
+        }
+
+        saveState();
+        checkComplete();
+    }
+
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 
     private record DropPayload(UUID id, List<ItemStack> items) {
         private DropPayload {
-            items = items.stream().map(ItemStack::clone).toList();
+            items = items.stream().filter(Objects::nonNull).map(ItemStack::clone).toList();
         }
     }
+
+    private record ActiveDrop(DropPayload payload, BlockKey target) { }
 
     private record BlockKey(UUID worldId, int x, int y, int z) {
         static BlockKey of(Location location) {
             return new BlockKey(Objects.requireNonNull(location.getWorld()).getUID(),
                     location.getBlockX(), location.getBlockY(), location.getBlockZ());
         }
+
         Location location() {
             World world = Bukkit.getWorld(worldId);
             if (world == null) throw new IllegalStateException("Airdrop world is unavailable");
