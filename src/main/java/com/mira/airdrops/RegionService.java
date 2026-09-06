@@ -2,10 +2,8 @@ package com.mira.airdrops;
 
 import com.mira.core.api.MiraCore;
 import org.bukkit.Bukkit;
-import org.bukkit.HeightMap;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.WorldBorder;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 
@@ -78,11 +76,11 @@ public final class RegionService {
                 && warzoneResolver.available();
     }
 
-    public Location randomLanding() {
-        return mode() == RegionMode.WORLDEDIT ? randomWorldEdit() : randomWarzone();
+    public Location randomSpawn() {
+        return mode() == RegionMode.WORLDEDIT ? randomWorldEditSpawn() : randomWarzoneSpawn();
     }
 
-    private Location randomWorldEdit() {
+    private Location randomWorldEditSpawn() {
         FileConfiguration cfg = plugin.getConfig();
         World world = Bukkit.getWorld(cfg.getString("region.worldedit.world", ""));
         if (world == null) return null;
@@ -91,28 +89,51 @@ public final class RegionService {
         int maxX = Math.max(cfg.getInt("region.worldedit.min-x"), cfg.getInt("region.worldedit.max-x"));
         int minZ = Math.min(cfg.getInt("region.worldedit.min-z"), cfg.getInt("region.worldedit.max-z"));
         int maxZ = Math.max(cfg.getInt("region.worldedit.min-z"), cfg.getInt("region.worldedit.max-z"));
-        int minY = Math.min(cfg.getInt("region.worldedit.min-y"), cfg.getInt("region.worldedit.max-y"));
-        int maxY = Math.max(cfg.getInt("region.worldedit.min-y"), cfg.getInt("region.worldedit.max-y"));
+        int spawnY = spawnY(world);
+        if (spawnY < world.getMinHeight() || spawnY >= world.getMaxHeight()) return null;
 
-        for (int attempt = 0; attempt < 100; attempt++) {
-            int x = ThreadLocalRandom.current().nextInt(minX, maxX + 1);
-            int z = ThreadLocalRandom.current().nextInt(minZ, maxZ + 1);
-            int y = world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 1;
-            if (y < minY || y > maxY || y >= world.getMaxHeight()) continue;
+        int minChunkX = Math.floorDiv(minX, 16);
+        int maxChunkX = Math.floorDiv(maxX, 16);
+        int minChunkZ = Math.floorDiv(minZ, 16);
+        int maxChunkZ = Math.floorDiv(maxZ, 16);
 
-            Location target = new Location(world, x, y, z);
-            if (target.getBlock().getType().isAir()) return target;
+        var loaded = new java.util.ArrayList<org.bukkit.Chunk>();
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                if (world.isChunkLoaded(chunkX, chunkZ)) {
+                    loaded.add(world.getChunkAt(chunkX, chunkZ));
+                }
+            }
+        }
+        if (loaded.isEmpty()) return null;
+
+        int attempts = Math.max(50, plugin.getConfig().getInt("event.max-placement-attempts-per-crate", 250));
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            org.bukkit.Chunk chunk = loaded.get(ThreadLocalRandom.current().nextInt(loaded.size()));
+            int chunkMinX = Math.max(minX, chunk.getX() << 4);
+            int chunkMaxX = Math.min(maxX, (chunk.getX() << 4) + 15);
+            int chunkMinZ = Math.max(minZ, chunk.getZ() << 4);
+            int chunkMaxZ = Math.min(maxZ, (chunk.getZ() << 4) + 15);
+            if (chunkMinX > chunkMaxX || chunkMinZ > chunkMaxZ) continue;
+
+            int x = ThreadLocalRandom.current().nextInt(chunkMinX, chunkMaxX + 1);
+            int z = ThreadLocalRandom.current().nextInt(chunkMinZ, chunkMaxZ + 1);
+            Location spawn = new Location(world, x, spawnY, z);
+            if (spawn.getBlock().getType().isAir()) return spawn;
         }
         return null;
     }
 
-    private Location randomWarzone() {
+    private Location randomWarzoneSpawn() {
         World world = Bukkit.getWorld(plugin.getConfig().getString("region.warzone-world", "world"));
         if (world == null || warzoneResolver == null || !warzoneResolver.available()) return null;
 
+        int spawnY = spawnY(world);
+        if (spawnY < world.getMinHeight() || spawnY >= world.getMaxHeight()) return null;
+
         var loaded = new java.util.ArrayList<org.bukkit.Chunk>();
         for (org.bukkit.Chunk chunk : world.getLoadedChunks()) {
-            Location claimProbe = new Location(world, (chunk.getX() << 4) + 8, world.getMinHeight(), (chunk.getZ() << 4) + 8);
+            Location claimProbe = new Location(world, (chunk.getX() << 4) + 8, spawnY, (chunk.getZ() << 4) + 8);
             if (warzoneResolver.isWarZone(claimProbe)) loaded.add(chunk);
         }
         if (loaded.isEmpty()) return null;
@@ -122,15 +143,16 @@ public final class RegionService {
             org.bukkit.Chunk chunk = loaded.get(ThreadLocalRandom.current().nextInt(loaded.size()));
             int x = (chunk.getX() << 4) + ThreadLocalRandom.current().nextInt(16);
             int z = (chunk.getZ() << 4) + ThreadLocalRandom.current().nextInt(16);
+            Location spawn = new Location(world, x, spawnY, z);
 
-            // This chunk is already loaded, so terrain lookup cannot synchronously generate a new chunk.
-            int y = world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 1;
-            if (y >= world.getMaxHeight()) continue;
-
-            Location target = new Location(world, x, y, z);
-            if (target.getBlock().getType().isAir()) return target;
+            // Special-zone chunks are kept loaded by MiraFactions. Only spawn into literal air.
+            if (spawn.getBlock().getType().isAir() && warzoneResolver.isWarZone(spawn)) return spawn;
         }
         return null;
+    }
+
+    private int spawnY(World world) {
+        return plugin.getConfig().getInt("event.spawn-y", 110);
     }
 
     public String summary() {
