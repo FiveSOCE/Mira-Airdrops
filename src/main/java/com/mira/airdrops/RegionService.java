@@ -9,7 +9,6 @@ import org.bukkit.WorldBorder;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 
-import java.lang.reflect.Constructor;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -167,8 +166,7 @@ public final class RegionService {
         if (!Bukkit.getPluginManager().isPluginEnabled("MiraFactions")) return null;
         try {
             Class<?> type = Class.forName("com.mira.airdrops.hook.MiraFactionsWarzoneBridge");
-            Constructor<?> constructor = type.getConstructor(MiraCore.class);
-            Object instance = constructor.newInstance(core);
+            Object instance = type.getConstructor().newInstance();
             return instance instanceof WarzoneResolver resolver ? resolver : null;
         } catch (Throwable throwable) {
             plugin.getLogger().warning("MiraFactions WarZone integration unavailable: " + throwable.getMessage());
