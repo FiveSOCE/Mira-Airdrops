@@ -4,18 +4,18 @@ First-party randomized supply-drop events for the Mira Minecraft ecosystem.
 
 ## Download
 
-**Current release: v0.1.3**
+**Current release: v0.1.4**
 
-- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.3/MiraAirdrops-0.1.3.jar
+- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.4/MiraAirdrops-0.1.4.jar
 - All releases: https://github.com/FiveSOCE/Mira-Airdrops/releases
 
-Verified v0.1.3 asset:
+Verified v0.1.4 asset:
 
-- Size: 43,456 bytes
-- SHA-256: `971955ce93628e4591418ea08c5be23d8e6ad36e922d86d248b7c9f03f0aca56`
-- Release target: `e18314bdf81cc5d594759d8e884f60f47bc6a661`
+- Size: 43,131 bytes
+- SHA-256: `150fd1e45122bdf0e1bfdbafb3ded07ab46f93a9a6907f7934e59a751d8396c8`
+- Release target: `cfd836810bac0cecda26e86c078da65470aaa647`
 
-## v0.1.3 hardening
+## v0.1.4 hardening
 
 - MiraFactions and WorldEdit integrations are isolated behind conditionally loaded bridges, so either soft dependency can be absent without breaking the base plugin.
 - WarZone resolution now uses the Bukkit ServicesManager where MiraFactions actually registers its public API.
@@ -27,7 +27,7 @@ Verified v0.1.3 asset:
 - Paper 1.21.11
 - Java 21
 - MiraCore 0.4.1+
-- MiraFactions 0.2.15+ when using WARZONE region mode
+- MiraFactions 0.2.17+ when using WARZONE region mode
 - WorldEdit 7.3.19+ when capturing a WorldEdit region
 
 MiraFactions and WorldEdit are optional integrations. The selected region mode must have its dependency/configuration available before an event can start.
@@ -146,7 +146,16 @@ gradle clean test build
 Output:
 
 ```text
-build/libs/MiraAirdrops-0.1.3.jar
+build/libs/MiraAirdrops-0.1.4.jar
 ```
 
 GitHub Actions performs the Java setup, Gradle build/test, artifact upload and release publication.
+
+
+## v0.1.4 watchdog fix
+
+- MiraFactions 0.2.17 claim/territory lookups no longer call `Location#getChunk()`; claim keys are derived directly from block coordinates.
+- WarZone sampling in MiraAirdrops only considers chunks that are already loaded.
+- Terrain height checks therefore cannot trigger synchronous chunk generation during airdrop spawning or reconciliation.
+- This directly addresses the Paper watchdog stalls caused by WarZone probes waiting for chunk generation on the server thread.
+
