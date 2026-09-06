@@ -4,18 +4,18 @@ First-party randomized supply-drop events for the Mira Minecraft ecosystem.
 
 ## Download
 
-**Current release: v0.1.5**
+**Current release: v0.1.6**
 
-- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.5/MiraAirdrops-0.1.5.jar
+- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.6/MiraAirdrops-0.1.6.jar
 - All releases: https://github.com/FiveSOCE/Mira-Airdrops/releases
 
-Verified v0.1.5 asset:
+Verified v0.1.6 asset:
 
-- Size: 44,937 bytes
-- SHA-256: `6b427b192ec7f5c981b1b1097c5e85c74bd97bb3962e442917465604bba69283`
-- Release target: `7f24e6ed5d7b329e80e36147990c481173ae4ff1`
+- Size: 44,946 bytes
+- SHA-256: `dc0abb7b504fa77f281388b5be3ac19460b3450d5c5664703e539967bb9f202e`
+- Release target: `dc36bd4044b2aa4967f0afc78fc69c7e741c5a47`
 
-## v0.1.5 hardening
+## v0.1.6 hardening
 
 - MiraFactions and WorldEdit integrations are isolated behind conditionally loaded bridges, so either soft dependency can be absent without breaking the base plugin.
 - WarZone resolution now uses the Bukkit ServicesManager where MiraFactions actually registers its public API.
@@ -146,13 +146,13 @@ gradle clean test build
 Output:
 
 ```text
-build/libs/MiraAirdrops-0.1.5.jar
+build/libs/MiraAirdrops-0.1.6.jar
 ```
 
 GitHub Actions performs the Java setup, Gradle build/test, artifact upload and release publication.
 
 
-## v0.1.5 watchdog fix
+## v0.1.6 watchdog fix
 
 - MiraFactions 0.2.17 claim/territory lookups no longer call `Location#getChunk()`; claim keys are derived directly from block coordinates.
 - WarZone sampling in MiraAirdrops only considers chunks that are already loaded.
@@ -161,7 +161,7 @@ GitHub Actions performs the Java setup, Gradle build/test, artifact upload and r
 
 
 
-## v0.1.5 fixed-altitude falling crates
+## v0.1.6 fixed-altitude falling crates
 
 - Supply crates now spawn at `event.spawn-y`, default **Y=110**.
 - The exact spawn block must be air. Occupied Y=110 positions are skipped and another X/Z column is selected.
@@ -171,4 +171,14 @@ GitHub Actions performs the Java setup, Gradle build/test, artifact upload and r
 - Duplicate active drop columns are rejected.
 - Persisted or externally removed crates respawn through the same Y=110 selector.
 - The admin GUI now includes **Teleport to nearest Crate**. Each click resolves the nearest currently landed active crate, so claimed/removed crates are skipped automatically.
+
+
+
+## v0.1.6 falling sand crate physics
+
+- Airborne airdrops are now `FallingBlock` **sand**, not chest blocks.
+- Sand spawns at the configured Y=110 air position and uses vanilla falling-block gravity.
+- On a valid landing, MiraAirdrops cancels the sand placement and explicitly places the marked loot chest at the landing block.
+- No sand block is left behind after a successful landing.
+- Existing Y=110 spawn selection, WarZone/WorldEdit targeting, persistence, reconciliation, and nearest-crate teleport remain intact.
 
