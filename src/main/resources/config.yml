@@ -1,4 +1,4 @@
-config-version: 1
+config-version: 2
 
 event:
   auto-enabled: false
@@ -13,6 +13,10 @@ event:
 region:
   mode: WARZONE
   warzone-world: world
+  # MiraFactions WarZone sampling first checks around world spawn so a normal-sized
+  # WarZone is not lost inside Minecraft's enormous default world border.
+  warzone-search-radius: 1500
+  warzone-search-attempts: 2000
   worldedit:
     world: ""
     min-x: 0
@@ -24,10 +28,10 @@ region:
     configured: false
 
 messages:
-  inbound: "&6&lAirdrop &8>> &fAn airdrop is inbound in &e%seconds%s&f!"
-  started: "&6&lAirdrop &8>> &fAirdrop active! &e%total% &fsupply crates have dropped."
-  remaining: "&6&lAirdrop &8>> &e%remaining%&7/&e%total% &fsupply crates remain."
-  complete: "&6&lAirdrop &8>> &aAll supply crates have been found!"
-  cancelled: "&6&lAirdrop &8>> &cThe active airdrop has been cancelled."
-  claim-prefix: "&6&lAirdrop &8>> &aYou found: "
-  overflow: "&6&lAirdrop &8>> &eSome rewards did not fit and were moved to &f/rewards&e."
+  inbound: "&fAn airdrop is inbound in &e%seconds%s&f!"
+  started: "&fAirdrop active! &e%total% &fsupply crates have dropped."
+  remaining: "&e%remaining%&7/&e%total% &fsupply crates remain."
+  complete: "&aAll supply crates have been found!"
+  cancelled: "&cThe active airdrop has been cancelled."
+  claim-prefix: "&aYou found: "
+  overflow: "&eSome rewards did not fit and were moved to &f/rewards&e."
