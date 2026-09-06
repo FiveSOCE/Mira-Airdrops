@@ -14,8 +14,8 @@ event:
 region:
   mode: WARZONE
   warzone-world: world
-  # MiraFactions WarZone sampling first checks around world spawn so a normal-sized
-  # WarZone is not lost inside Minecraft's enormous default world border.
+  # WarZone sampling only uses chunks that are already loaded. This prevents airdrops
+  # from synchronously generating terrain on the server thread.
   warzone-search-radius: 1500
   warzone-search-attempts: 2000
   worldedit:
