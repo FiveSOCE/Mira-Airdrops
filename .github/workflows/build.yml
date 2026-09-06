@@ -35,19 +35,19 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: MiraAirdrops-0.1.0
-          path: build/libs/MiraAirdrops-0.1.0.jar
+          name: MiraAirdrops-0.1.1
+          path: build/libs/MiraAirdrops-0.1.1.jar
           if-no-files-found: error
 
-      - name: Publish v0.1.0 release if missing
+      - name: Publish v0.1.1 release if missing
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release view v0.1.0 >/dev/null 2>&1; then
-            gh release create v0.1.0 \
-              build/libs/MiraAirdrops-0.1.0.jar \
+          if ! gh release view v0.1.1 >/dev/null 2>&1; then
+            gh release create v0.1.1 \
+              build/libs/MiraAirdrops-0.1.1.jar \
               --target "${{ github.sha }}" \
-              --title "MiraAirdrops v0.1.0" \
-              --notes "Initial MiraAirdrops release: randomized 20-50 falling supply crates, per-crate 1-5 item loot rolls, MiraFactions Warzone or captured WorldEdit regions, MiraCore guaranteed reward delivery, inbound/start/remaining/completion messaging, persistent event-until-found behavior, auto scheduling, and full in-game GUI administration."
+              --title "MiraAirdrops v0.1.1" \
+              --notes "Hardening release: persistent active/inbound events across restarts, PDC-marked protected crates, safe reward queueing, improved MiraFactions WarZone sampling, MiraCore audit integration, standard Mira broadcasts, and command tab completion."
           fi
