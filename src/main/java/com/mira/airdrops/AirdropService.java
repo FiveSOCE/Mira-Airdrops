@@ -210,7 +210,7 @@ public final class AirdropService {
 
         FallingBlock entity = world.spawnFallingBlock(
                 new Location(world, spawn.getBlockX() + 0.5D, spawn.getBlockY(), spawn.getBlockZ() + 0.5D),
-                Material.CHEST.createBlockData());
+                Material.SAND.createBlockData());
         entity.setGravity(true);
         entity.setDropItem(false);
         entity.setHurtEntities(false);
@@ -250,14 +250,14 @@ public final class AirdropService {
         }
 
         Location landing = event.getBlock().getLocation();
+        event.setCancelled(true);
+        entity.remove();
+
         Bukkit.getScheduler().runTask(plugin, () -> {
-            if (!active) {
-                clearMarkedChest(landing.getBlock(), drop.payload().id());
-                return;
-            }
+            if (!active) return;
 
             Block block = landing.getBlock();
-            if (block.getType() != Material.CHEST) {
+            if (!block.getType().isAir()) {
                 if (!respawn(drop.payload(), true)) {
                     total = Math.max(0, total - 1);
                     saveState();
@@ -266,6 +266,7 @@ public final class AirdropService {
                 return;
             }
 
+            block.setType(Material.CHEST, false);
             ActiveDrop landedDrop = new ActiveDrop(drop.payload(), BlockKey.of(landing));
             markChest(block, drop.payload().id());
             landed.put(landedDrop.target(), landedDrop);
