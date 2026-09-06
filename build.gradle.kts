@@ -4,7 +4,7 @@ import java.security.MessageDigest
 plugins { java }
 
 group = "com.mira"
-version = "0.1.0"
+version = "0.1.1"
 
 repositories {
     mavenCentral()
@@ -67,5 +67,11 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.test { useJUnitPlatform() }
+
+tasks.processResources {
+    filesMatching("plugin.yml") {
+        expand("version" to project.version)
+    }
+}
 
 tasks.jar { archiveFileName.set("MiraAirdrops-${project.version}.jar") }
