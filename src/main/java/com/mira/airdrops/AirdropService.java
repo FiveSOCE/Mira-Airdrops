@@ -44,6 +44,7 @@ public final class AirdropService {
     private long inboundBeginsAt;
     private BukkitTask inboundTask;
     private BukkitTask autoTask;
+    private BukkitTask reconcileTask;
 
     public AirdropService(MiraAirdropsPlugin plugin, MiraCore core, RegionService regions) {
         this.plugin = plugin;
@@ -55,6 +56,8 @@ public final class AirdropService {
         loadLoot();
         loadState();
         scheduleAuto();
+        long reconcileTicks = Math.max(20L, plugin.getConfig().getLong("event.reconcile-seconds", 5L) * 20L);
+        reconcileTask = Bukkit.getScheduler().runTaskTimer(plugin, this::reconcileActiveDrops, reconcileTicks, reconcileTicks);
     }
 
     public boolean inbound() { return inbound; }
@@ -163,6 +166,7 @@ public final class AirdropService {
     public void shutdown() {
         if (inboundTask != null) inboundTask.cancel();
         if (autoTask != null) autoTask.cancel();
+        if (reconcileTask != null) reconcileTask.cancel();
 
         // Preserve the logical event before removing transient world objects. This prevents
         // duplicate vanilla falling blocks/chests after a clean restart while allowing the
@@ -316,6 +320,59 @@ public final class AirdropService {
         if (block == null) return false;
         String id = block.getPersistentDataContainer().get(dropKey, PersistentDataType.STRING);
         return id != null;
+    }
+
+    private void reconcileActiveDrops() {
+        if (!active) return;
+
+        boolean changed = false;
+
+        for (Map.Entry<UUID, ActiveDrop> entry : new ArrayList<>(falling.entrySet())) {
+            UUID entityId = entry.getKey();
+            ActiveDrop drop = entry.getValue();
+            var entity = Bukkit.getEntity(entityId);
+
+            boolean valid = entity instanceof FallingBlock fallingBlock
+                    && !fallingBlock.isDead()
+                    && drop.payload().id().toString().equals(
+                    fallingBlock.getPersistentDataContainer().get(dropKey, PersistentDataType.STRING));
+
+            if (valid) continue;
+
+            falling.remove(entityId);
+            if (entity != null) entity.remove();
+
+            if (!respawn(drop.payload(), false)) {
+                total = Math.max(0, total - 1);
+            }
+            changed = true;
+        }
+
+        for (Map.Entry<BlockKey, ActiveDrop> entry : new ArrayList<>(landed.entrySet())) {
+            ActiveDrop drop = entry.getValue();
+            Block block;
+            try {
+                block = entry.getKey().location().getBlock();
+            } catch (IllegalStateException ex) {
+                landed.remove(entry.getKey());
+                total = Math.max(0, total - 1);
+                changed = true;
+                continue;
+            }
+
+            if (block.getType() == Material.CHEST && isMarkedChest(block, drop.payload().id())) continue;
+
+            landed.remove(entry.getKey());
+            if (!respawn(drop.payload(), false)) {
+                total = Math.max(0, total - 1);
+            }
+            changed = true;
+        }
+
+        if (changed) {
+            saveState();
+            checkComplete();
+        }
     }
 
     private void checkComplete() {
