@@ -35,19 +35,19 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: MiraAirdrops-0.1.1
-          path: build/libs/MiraAirdrops-0.1.1.jar
+          name: MiraAirdrops-0.1.2
+          path: build/libs/MiraAirdrops-0.1.2.jar
           if-no-files-found: error
 
-      - name: Publish v0.1.1 release if missing
+      - name: Publish v0.1.2 release if missing
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release view v0.1.1 >/dev/null 2>&1; then
-            gh release create v0.1.1 \
-              build/libs/MiraAirdrops-0.1.1.jar \
+          if ! gh release view v0.1.2 >/dev/null 2>&1; then
+            gh release create v0.1.2 \
+              build/libs/MiraAirdrops-0.1.2.jar \
               --target "${{ github.sha }}" \
-              --title "MiraAirdrops v0.1.1" \
-              --notes "Hardening release: persistent active/inbound events across restarts, PDC-marked protected crates, safe reward queueing, improved MiraFactions WarZone sampling, MiraCore audit integration, standard Mira broadcasts, and command tab completion."
+              --title "MiraAirdrops v0.1.2" \
+              --notes "Release-ready hardening build: persistent active/inbound events across restarts, PDC-marked protected crates, safe reward queueing, improved MiraFactions WarZone sampling, MiraCore audit integration, standard Mira broadcasts, command tab completion, and finalized 0.1.2 metadata."
           fi
