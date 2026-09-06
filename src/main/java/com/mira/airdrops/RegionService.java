@@ -1,11 +1,6 @@
 package com.mira.airdrops;
 
 import com.mira.core.api.MiraCore;
-import com.mira.factions.api.MiraFactionsApi;
-import com.sk89q.worldedit.IncompleteRegionException;
-import com.sk89q.worldedit.WorldEdit;
-import com.sk89q.worldedit.bukkit.BukkitAdapter;
-import com.sk89q.worldedit.regions.Region;
 import org.bukkit.Bukkit;
 import org.bukkit.HeightMap;
 import org.bukkit.Location;
@@ -14,16 +9,21 @@ import org.bukkit.WorldBorder;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 
+import java.lang.reflect.Constructor;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
 
 public final class RegionService {
     private final MiraAirdropsPlugin plugin;
     private final MiraCore core;
+    private final WarzoneResolver warzoneResolver;
+    private final WorldEditSelectionCapture worldEditCapture;
 
     public RegionService(MiraAirdropsPlugin plugin, MiraCore core) {
         this.plugin = plugin;
         this.core = core;
+        this.warzoneResolver = loadWarzoneResolver();
+        this.worldEditCapture = loadWorldEditCapture();
     }
 
     public RegionMode mode() {
@@ -40,28 +40,27 @@ public final class RegionService {
     }
 
     public boolean captureWorldEdit(Player player) {
-        if (Bukkit.getPluginManager().getPlugin("WorldEdit") == null) return false;
+        if (worldEditCapture == null) return false;
+        SelectionBounds bounds;
         try {
-            var actor = BukkitAdapter.adapt(player);
-            var session = WorldEdit.getInstance().getSessionManager().get(actor);
-            var selectionWorld = session.getSelectionWorld();
-            if (selectionWorld == null) return false;
-
-            Region region = session.getSelection(selectionWorld);
-            FileConfiguration cfg = plugin.getConfig();
-            cfg.set("region.worldedit.world", selectionWorld.getName());
-            cfg.set("region.worldedit.min-x", region.getMinimumPoint().x());
-            cfg.set("region.worldedit.min-y", region.getMinimumPoint().y());
-            cfg.set("region.worldedit.min-z", region.getMinimumPoint().z());
-            cfg.set("region.worldedit.max-x", region.getMaximumPoint().x());
-            cfg.set("region.worldedit.max-y", region.getMaximumPoint().y());
-            cfg.set("region.worldedit.max-z", region.getMaximumPoint().z());
-            cfg.set("region.worldedit.configured", true);
-            plugin.saveConfig();
-            return true;
-        } catch (IncompleteRegionException ex) {
+            bounds = worldEditCapture.capture(player);
+        } catch (Throwable throwable) {
+            plugin.getLogger().warning("WorldEdit selection capture failed: " + throwable.getMessage());
             return false;
         }
+        if (bounds == null) return false;
+
+        FileConfiguration cfg = plugin.getConfig();
+        cfg.set("region.worldedit.world", bounds.world());
+        cfg.set("region.worldedit.min-x", bounds.minX());
+        cfg.set("region.worldedit.min-y", bounds.minY());
+        cfg.set("region.worldedit.min-z", bounds.minZ());
+        cfg.set("region.worldedit.max-x", bounds.maxX());
+        cfg.set("region.worldedit.max-y", bounds.maxY());
+        cfg.set("region.worldedit.max-z", bounds.maxZ());
+        cfg.set("region.worldedit.configured", true);
+        plugin.saveConfig();
+        return true;
     }
 
     public void setWarzoneWorld(World world) {
@@ -76,7 +75,8 @@ public final class RegionService {
         }
 
         return Bukkit.getWorld(plugin.getConfig().getString("region.warzone-world", "world")) != null
-                && core.services().get(MiraFactionsApi.class).isPresent();
+                && warzoneResolver != null
+                && warzoneResolver.available();
     }
 
     public Location randomLanding() {
@@ -109,8 +109,7 @@ public final class RegionService {
 
     private Location randomWarzone() {
         World world = Bukkit.getWorld(plugin.getConfig().getString("region.warzone-world", "world"));
-        MiraFactionsApi factions = core.services().get(MiraFactionsApi.class).orElse(null);
-        if (world == null || factions == null) return null;
+        if (world == null || warzoneResolver == null || !warzoneResolver.available()) return null;
 
         Location spawn = world.getSpawnLocation();
         int searchRadius = Math.max(64, plugin.getConfig().getInt("region.warzone-search-radius", 1500));
@@ -128,17 +127,14 @@ public final class RegionService {
         double localMinZ = Math.max(borderMinZ, spawn.getZ() - searchRadius);
         double localMaxZ = Math.min(borderMaxZ, spawn.getZ() + searchRadius);
 
-        Location local = sampleWarzone(world, factions, localMinX, localMaxX, localMinZ, localMaxZ, attempts);
+        Location local = sampleWarzone(world, localMinX, localMaxX, localMinZ, localMaxZ, attempts);
         if (local != null) return local;
 
-        // Fallback to the full border only when the configured local search did not find
-        // enough WarZone. The faction check happens before terrain lookup, so rejected
-        // coordinates do not unnecessarily load chunks.
-        return sampleWarzone(world, factions, borderMinX, borderMaxX, borderMinZ, borderMaxZ,
+        return sampleWarzone(world, borderMinX, borderMaxX, borderMinZ, borderMaxZ,
                 Math.max(250, attempts / 4));
     }
 
-    private Location sampleWarzone(World world, MiraFactionsApi factions,
+    private Location sampleWarzone(World world,
                                    double minX, double maxX, double minZ, double maxZ, int attempts) {
         if (maxX <= minX || maxZ <= minZ) return null;
 
@@ -147,7 +143,7 @@ public final class RegionService {
             int z = (int) Math.floor(ThreadLocalRandom.current().nextDouble(minZ, maxZ));
 
             Location claimProbe = new Location(world, x, world.getMinHeight(), z);
-            if (!factions.isWarZone(claimProbe)) continue;
+            if (!warzoneResolver.isWarZone(claimProbe)) continue;
 
             int y = world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 1;
             if (y >= world.getMaxHeight()) continue;
@@ -160,9 +156,35 @@ public final class RegionService {
 
     public String summary() {
         if (mode() == RegionMode.WARZONE) {
-            return "MiraFactions Warzone (" + plugin.getConfig().getString("region.warzone-world", "world") + ")";
+            String availability = warzoneResolver == null || !warzoneResolver.available() ? ", integration unavailable" : "";
+            return "MiraFactions Warzone (" + plugin.getConfig().getString("region.warzone-world", "world") + availability + ")";
         }
         if (!plugin.getConfig().getBoolean("region.worldedit.configured", false)) return "WorldEdit (not configured)";
         return "WorldEdit (" + plugin.getConfig().getString("region.worldedit.world", "?") + ")";
+    }
+
+    private WarzoneResolver loadWarzoneResolver() {
+        if (!Bukkit.getPluginManager().isPluginEnabled("MiraFactions")) return null;
+        try {
+            Class<?> type = Class.forName("com.mira.airdrops.hook.MiraFactionsWarzoneBridge");
+            Constructor<?> constructor = type.getConstructor(MiraCore.class);
+            Object instance = constructor.newInstance(core);
+            return instance instanceof WarzoneResolver resolver ? resolver : null;
+        } catch (Throwable throwable) {
+            plugin.getLogger().warning("MiraFactions WarZone integration unavailable: " + throwable.getMessage());
+            return null;
+        }
+    }
+
+    private WorldEditSelectionCapture loadWorldEditCapture() {
+        if (!Bukkit.getPluginManager().isPluginEnabled("WorldEdit")) return null;
+        try {
+            Class<?> type = Class.forName("com.mira.airdrops.hook.WorldEditSelectionBridge");
+            Object instance = type.getConstructor().newInstance();
+            return instance instanceof WorldEditSelectionCapture capture ? capture : null;
+        } catch (Throwable throwable) {
+            plugin.getLogger().warning("WorldEdit selection integration unavailable: " + throwable.getMessage());
+            return null;
+        }
     }
 }
