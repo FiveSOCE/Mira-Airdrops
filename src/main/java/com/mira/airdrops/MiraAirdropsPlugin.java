@@ -40,6 +40,8 @@ public final class MiraAirdropsPlugin extends JavaPlugin {
         getLogger().info("MiraAirdrops v" + getPluginMeta().getVersion() + " enabled.");
     }
 
+    public AirdropService service() { return service; }
+
     @Override
     public void onDisable() {
         if (service != null) service.shutdown();
