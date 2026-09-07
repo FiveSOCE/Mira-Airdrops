@@ -4,16 +4,21 @@ First-party randomized supply-drop events for the Mira Minecraft ecosystem.
 
 ## Download
 
-**Current release: v0.1.6**
+**Current release: v0.1.7**
 
-- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.6/MiraAirdrops-0.1.6.jar
+- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.7/MiraAirdrops-0.1.7.jar
 - All releases: https://github.com/FiveSOCE/Mira-Airdrops/releases
 
-Verified v0.1.6 asset:
+Verified v0.1.7 asset:
 
-- Size: 44,946 bytes
-- SHA-256: `dc0abb7b504fa77f281388b5be3ac19460b3450d5c5664703e539967bb9f202e`
+- Size: 44,965 bytes
+- SHA-256: `bb14198a5528909ca2cce719cd91aad0b9cc06134b1938a43cbe8733a5d7a4db`
 - Release target: `dc36bd4044b2aa4967f0afc78fc69c7e741c5a47`
+
+
+## v0.1.7 event/voucher integration
+
+MiraAirdrops exposes its live `AirdropService` through the plugin entrypoint for first-party Mira integrations. MiraItems can therefore reject an Airdrop Call voucher while an event is already inbound/active, and MiraEvents can start Enhanced Airdrops without bypassing the normal Airdrop service state machine.
 
 ## v0.1.6 hardening
 
@@ -146,13 +151,13 @@ gradle clean test build
 Output:
 
 ```text
-build/libs/MiraAirdrops-0.1.6.jar
+build/libs/MiraAirdrops-0.1.7.jar
 ```
 
 GitHub Actions performs the Java setup, Gradle build/test, artifact upload and release publication.
 
 
-## v0.1.6 watchdog fix
+## v0.1.7 watchdog fix
 
 - MiraFactions 0.2.17 claim/territory lookups no longer call `Location#getChunk()`; claim keys are derived directly from block coordinates.
 - WarZone sampling in MiraAirdrops only considers chunks that are already loaded.
@@ -161,7 +166,7 @@ GitHub Actions performs the Java setup, Gradle build/test, artifact upload and r
 
 
 
-## v0.1.6 fixed-altitude falling crates
+## v0.1.7 fixed-altitude falling crates
 
 - Supply crates now spawn at `event.spawn-y`, default **Y=110**.
 - The exact spawn block must be air. Occupied Y=110 positions are skipped and another X/Z column is selected.
@@ -174,7 +179,7 @@ GitHub Actions performs the Java setup, Gradle build/test, artifact upload and r
 
 
 
-## v0.1.6 falling sand crate physics
+## v0.1.7 falling sand crate physics
 
 - Airborne airdrops are now `FallingBlock` **sand**, not chest blocks.
 - Sand spawns at the configured Y=110 air position and uses vanilla falling-block gravity.
