@@ -54,7 +54,10 @@ val bytecodeJavaVersion = providers.gradleProperty("bytecodeJavaVersion").map(St
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:${paperApiVersion.get()}")
-    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.19")
+    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.19") {
+        exclude(group = "com.google.guava", module = "guava")
+        exclude(group = "com.google.code.gson", module = "gson")
+    }
     compileOnly(files(miraCoreJar))
     compileOnly(files(miraFactionsJar))
 
