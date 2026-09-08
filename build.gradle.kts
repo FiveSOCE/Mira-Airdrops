@@ -4,7 +4,7 @@ import java.security.MessageDigest
 plugins { java }
 
 group = "com.mira"
-version = "0.1.7"
+version = "0.1.8"
 
 repositories {
     mavenCentral()
@@ -48,8 +48,12 @@ val downloadMiraDependencies by tasks.registering {
     }
 }
 
+val paperApiVersion = providers.gradleProperty("paperApiVersion").orElse("1.21.11-R0.1-SNAPSHOT")
+val compileJavaVersion = providers.gradleProperty("compileJavaVersion").map(String::toInt).orElse(21)
+val bytecodeJavaVersion = providers.gradleProperty("bytecodeJavaVersion").map(String::toInt).orElse(21)
+
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:${paperApiVersion.get()}")
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.19")
     compileOnly(files(miraCoreJar))
     compileOnly(files(miraFactionsJar))
@@ -58,12 +62,12 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
 }
 
-java { toolchain.languageVersion.set(JavaLanguageVersion.of(21)) }
+java { toolchain.languageVersion.set(JavaLanguageVersion.of(compileJavaVersion.get())) }
 
 tasks.withType<JavaCompile>().configureEach {
     dependsOn(downloadMiraDependencies)
     options.encoding = "UTF-8"
-    options.release.set(21)
+    options.release.set(bytecodeJavaVersion.get())
 }
 
 tasks.test { useJUnitPlatform() }
