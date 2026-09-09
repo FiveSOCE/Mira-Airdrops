@@ -1,20 +1,14 @@
 # MiraAirdrops
 
-First-party randomized supply-drop events for the Mira Minecraft ecosystem.
-
 ## Download
 
-**Current release: v0.1.7**
+**Latest compatibility release: v0.1.8**
 
-- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.8/MiraAirdrops-0.1.8.jar
-- All releases: https://github.com/FiveSOCE/Mira-Airdrops/releases
+[**Download MiraAirdrops-0.1.8.jar**](https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.8/MiraAirdrops-0.1.8.jar)
 
-Verified v0.1.7 asset:
+[View all releases](https://github.com/FiveSOCE/Mira-Airdrops/releases)
 
-- Size: 44,965 bytes
-- SHA-256: `bb14198a5528909ca2cce719cd91aad0b9cc06134b1938a43cbe8733a5d7a4db`
-- Release target: `dc36bd4044b2aa4967f0afc78fc69c7e741c5a47`
-
+First-party randomized supply-drop events for the Mira Minecraft ecosystem.
 
 ## v0.1.7 event/voucher integration
 
