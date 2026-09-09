@@ -6,7 +6,7 @@ First-party randomized supply-drop events for the Mira Minecraft ecosystem.
 
 **Current release: v0.1.7**
 
-- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.7/MiraAirdrops-0.1.7.jar
+- Direct JAR: https://github.com/FiveSOCE/Mira-Airdrops/releases/download/v0.1.8/MiraAirdrops-0.1.8.jar
 - All releases: https://github.com/FiveSOCE/Mira-Airdrops/releases
 
 Verified v0.1.7 asset:
