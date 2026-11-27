@@ -81,4 +81,4 @@ tasks.processResources {
     }
 }
 
-tasks.jar { archiveFileName.set("MiraAirdrops-${project.version}.jar") }
+tasks.jar { archiveFileName.set("MiraAirdrops_1.18.2.jar") }
