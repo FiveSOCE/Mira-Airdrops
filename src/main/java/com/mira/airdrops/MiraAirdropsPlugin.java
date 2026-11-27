@@ -37,7 +37,7 @@ public final class MiraAirdropsPlugin extends JavaPlugin {
 
         core.modules().setHealth(this, ModuleHealth.HEALTHY,
                 "Randomized Warzone/WorldEdit airdrop events ready");
-        getLogger().info("MiraAirdrops v" + getPluginMeta().getVersion() + " enabled.");
+        getLogger().info("MiraAirdrops v" + getDescription().getVersion() + " enabled.");
     }
 
     public AirdropService service() { return service; }
